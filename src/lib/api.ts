@@ -134,20 +134,21 @@ export async function searchListings(searchTerm: string) {
           { field: 'furnishStatus' },
           { field: 'listingStatus' },
           { field: 'name' },
+          { field: 'city' },
+          { field: 'location' },
+          { field: 'type' },
         ],
       }),
     });
     if (!response.ok) throw new Error('Search unavailable');
     const payload = (await response.json()) as ListingsPayload | RawListing[];
     const records = Array.isArray(payload) ? payload : payload.data || payload.listings || [];
-    return records.map((item, index) => normalizeListing(item, index));
+    const normalized = records.map((item, index) => normalizeListing(item, index));
+    const term = searchTerm.trim().toLowerCase();
+    const matches = filterListings(normalized, term);
+    return matches.length ? matches : filterListings(demoListings, term);
   } catch {
-    const term = searchTerm.toLowerCase();
-    return demoListings.filter((listing) =>
-      `${listing.name} ${listing.city} ${listing.type} ${listing.description}`
-        .toLowerCase()
-        .includes(term)
-    );
+    return filterListings(demoListings, searchTerm.trim().toLowerCase());
   }
 }
 
@@ -162,7 +163,7 @@ export async function getListingDetails(id: string) {
     const payload = (await response.json()) as RawListing | RawListing[] | ListingsPayload;
     const record = Array.isArray(payload)
       ? payload[0]
-      : 'data' in payload || 'listings' in payload
+      : isListingsPayload(payload)
         ? (payload.data || payload.listings || [])[0]
         : payload;
     return record
@@ -225,4 +226,16 @@ function normalizeListing(item: RawListing, index: number): Listing {
     description:
       item.description || 'A considered place to land, with everything you need for a good stay.',
   };
+}
+
+function filterListings(listings: Listing[], term: string): Listing[] {
+  return listings.filter((listing) =>
+    `${listing.name} ${listing.city} ${listing.type} ${listing.tag} ${listing.description}`
+      .toLowerCase()
+      .includes(term)
+  );
+}
+
+function isListingsPayload(payload: RawListing | ListingsPayload): payload is ListingsPayload {
+  return 'data' in payload || 'listings' in payload;
 }
