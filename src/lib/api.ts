@@ -1,7 +1,9 @@
+import { Listing, ListingsPayload, RawListing, AuthPayload } from './types';
+
 const API_BASE = import.meta.env.VITE_CORE_URL || 'https://app.mconnect.africa/core';
 const API_KEY = import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyDJOxxdZLjMIzPhJPIhGtM6BQE0TQ53ZA0';
 
-export const demoListings = [
+export const demoListings: Listing[] = [
   {
     id: '1',
     name: 'The Green Courtyard',
@@ -102,15 +104,17 @@ export async function getListings() {
       body: JSON.stringify({ status: 'ACTIVE' }),
     });
     if (!response.ok) throw new Error('Listings unavailable');
-    const payload = await response.json();
-    const records = payload.data || payload.listings || payload;
-    return Array.isArray(records) && records.length ? records.map(normalizeListing) : demoListings;
+    const payload = (await response.json()) as ListingsPayload | RawListing[];
+    const records = Array.isArray(payload) ? payload : payload.data || payload.listings || [];
+    return Array.isArray(records) && records.length
+      ? records.map((item, index) => normalizeListing(item, index))
+      : demoListings;
   } catch {
     return demoListings;
   }
 }
 
-export async function login(email, password) {
+export async function login(email: string, password: string) {
   const response = await fetch(
     `https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyPassword?key=${API_KEY}`,
     {
@@ -119,7 +123,7 @@ export async function login(email, password) {
       body: JSON.stringify({ email, password, returnSecureToken: true }),
     }
   );
-  const payload = await response.json();
+  const payload = (await response.json()) as AuthPayload;
   if (!response.ok)
     throw new Error(
       payload.error?.message?.replaceAll('_', ' ').toLowerCase() || 'Unable to sign in'
@@ -130,10 +134,10 @@ export async function login(email, password) {
 export async function logout() {
   return Promise.resolve();
 }
-function normalizeListing(item) {
+function normalizeListing(item: RawListing, index: number): Listing {
   return {
     ...item,
-    id: item._id || item.id,
+    id: item._id || item.id || `listing-${index}`,
     name: item.name || item.title || 'Mouv stay',
     city: item.city || item.location || 'Africa',
     type: item.type || 'Apartment',

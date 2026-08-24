@@ -12,19 +12,25 @@ import {
   UserRound,
   X,
 } from 'lucide-react';
-import { getListings, login, logout } from './lib/api';
-import './index.css';
+import { getListings } from '../lib/api';
+import type { Listing } from '../lib/types';
+import { login, logout } from '../features/auth/auth.service';
+import '../index.css';
+import type { FormEvent } from 'react';
+import type { User } from 'firebase/auth';
 
 const categories = ['All stays', 'Apartments', 'Villas', 'Beachfront', 'Workspaces'];
 
 function App() {
-  const [listings, setListings] = useState([]);
+  const [listings, setListings] = useState<Listing[]>([]);
   const [query, setQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All stays');
-  const [selected, setSelected] = useState(null);
-  const [saved, setSaved] = useState([]);
+  const [selected, setSelected] = useState<Listing | null>(null);
+  const [saved, setSaved] = useState<string[]>([]);
   const [authOpen, setAuthOpen] = useState(false);
-  const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('mouv-user') || 'null'));
+  const [user, setUser] = useState<User | null>(() =>
+    JSON.parse(localStorage.getItem('mouv-user') || 'null')
+  );
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -49,11 +55,11 @@ function App() {
       }),
     [activeCategory, listings, query]
   );
-  const toggleSaved = (id) =>
+  const toggleSaved = (id: string) =>
     setSaved((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
     );
-  const handleLogin = async (email, password) => {
+  const handleLogin = async (email: string, password: string) => {
     const result = await login(email, password);
     setUser(result);
     localStorage.setItem('mouv-user', JSON.stringify(result));
@@ -247,7 +253,14 @@ function App() {
   );
 }
 
-function ListingCard({ place, isSaved, onSave, onSelect }) {
+interface ListingCardProps {
+  place: Listing;
+  isSaved: boolean;
+  onSave: () => void;
+  onSelect: () => void;
+}
+
+function ListingCard({ place, isSaved, onSave, onSelect }: ListingCardProps) {
   return (
     <article className="group cursor-pointer" onClick={onSelect}>
       <div className="relative aspect-[1.08] overflow-hidden rounded-2xl bg-[#e5ebe2]">
@@ -305,7 +318,14 @@ function Skeleton() {
     </div>
   );
 }
-function DetailModal({ place, isSaved, onSave, onClose }) {
+interface DetailModalProps {
+  place: Listing;
+  isSaved: boolean;
+  onSave: () => void;
+  onClose: () => void;
+}
+
+function DetailModal({ place, isSaved, onSave, onClose }: DetailModalProps) {
   return (
     <div
       className="fixed inset-0 z-50 grid place-items-center bg-[#10241d]/50 p-4 backdrop-blur-sm"
@@ -366,16 +386,21 @@ function DetailModal({ place, isSaved, onSave, onClose }) {
     </div>
   );
 }
-function AuthModal({ onClose, onLogin }) {
+interface AuthModalProps {
+  onClose: () => void;
+  onLogin: (email: string, password: string) => Promise<void>;
+}
+
+function AuthModal({ onClose, onLogin }: AuthModalProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const submit = async (event) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
       await onLogin(email, password);
-    } catch (err) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unable to sign in');
     }
   };
   return (
