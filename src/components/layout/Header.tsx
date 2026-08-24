@@ -1,4 +1,4 @@
-import { Menu, Sparkles } from 'lucide-react';
+import { Menu, BicepsFlexed } from 'lucide-react';
 import { useAuth } from '../../features/auth/auth.hooks';
 import { UserMenu } from '../../features/auth/components/UserMenu';
 import { Button } from '../ui/Button';
@@ -15,7 +15,7 @@ export function Header({ onSignInClick }: HeaderProps) {
       <div className="mx-auto flex max-w-[1320px] items-center justify-between px-5 py-5 lg:px-10">
         <a className="flex items-center gap-2 text-[#193f32]" href="#top">
           <span className="grid h-9 w-9 place-items-center rounded-full bg-[#d7e7d4]">
-            <Sparkles size={18} />
+            <BicepsFlexed size={18} />
           </span>
           <span className="text-xl font-bold tracking-[-.04em]">
             mouv<span className="text-[#cf6a4c]">.</span>

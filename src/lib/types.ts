@@ -18,6 +18,7 @@ export interface RawListing {
   description?: string;
 
   status?: string;
+  rating?: number;
   product?: string;
   listingStatus?: string;
 

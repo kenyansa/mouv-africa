@@ -1,5 +1,5 @@
 import { getStoredSession, setStoredSession } from './token';
-import { Listing, ListingsPayload, RawListing, AuthPayload } from './types';
+import type { AuthPayload, Listing, ListingsPayload, RawListing } from './types';
 
 const API_BASE = import.meta.env.VITE_CORE_URL || 'https://app.mconnect.africa/core';
 const API_KEY = import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyDJOxxdZLjMIzPhJPIhGtM6BQE0TQ53ZA0';
@@ -197,7 +197,7 @@ export async function getListingDetails(id: string) {
   }
 }
 
-export async function getUserDetails() {
+export async function getUserDetails(): Promise<unknown> {
   const response = await fetch(`${API_BASE}/getuserdetails`, {
     method: 'POST',
     headers: authHeaders(),
@@ -223,7 +223,11 @@ export async function login(email: string, password: string) {
     );
   }
 
-  const session = { email: payload.email, token: payload.idToken as string, id: payload.localId };
+  if (!payload.idToken) {
+    throw new Error('Firebase did not return a session token');
+  }
+
+  const session = { email: payload.email, token: payload.idToken, id: payload.localId };
   setStoredSession(session);
   return session;
 }
