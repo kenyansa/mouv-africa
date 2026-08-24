@@ -109,16 +109,24 @@ export async function getListings() {
       headers: authHeaders(),
       body: JSON.stringify({ status: 'ACTIVE' }),
     });
-    if (!response.ok) throw new Error('Listings unavailable');
-    const payload = (await response.json()) as ListingsPayload | RawListing[];
-    console.log('raw payload shape:', payload); //raw fetching
-    const records = Array.isArray(payload) ? payload : payload.data || payload.listings || [];
-    console.log('extracted records:', records); // extraction
-    return Array.isArray(records) && records.length
+
+    if (!response.ok) {
+      throw new Error('Listings unavailable');
+    }
+
+    const payload = (await response.json()) as ListingsPayload;
+
+    console.log('raw payload shape:', payload);
+
+    const records = Array.isArray(payload.Payload) ? payload.Payload : [];
+
+    console.log('extracted records:', records);
+
+    return records.length
       ? records.map((item, index) => normalizeListing(item, index))
       : demoListings;
   } catch (err) {
-    console.error('getListings failed:', err); //hey
+    console.error('getListings failed:', err);
     return demoListings;
   }
 }
@@ -131,26 +139,34 @@ export async function searchListings(searchTerm: string) {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
-        searchTerm,
         fieldsToSearchFor: [
           { field: 'description' },
           { field: 'furnishStatus' },
           { field: 'listingStatus' },
           { field: 'name' },
-          { field: 'city' },
-          { field: 'location' },
-          { field: 'type' },
         ],
+        searchTerm: searchTerm.trim(),
       }),
     });
-    if (!response.ok) throw new Error('Search unavailable');
-    const payload = (await response.json()) as ListingsPayload | RawListing[];
-    const records = Array.isArray(payload) ? payload : payload.data || payload.listings || [];
+
+    if (!response.ok) {
+      throw new Error('Search unavailable');
+    }
+
+    const payload = (await response.json()) as ListingsPayload;
+
+    const records = Array.isArray(payload.Payload) ? payload.Payload : [];
+
     const normalized = records.map((item, index) => normalizeListing(item, index));
+
     const term = searchTerm.trim().toLowerCase();
+
     const matches = filterListings(normalized, term);
+
     return matches.length ? matches : filterListings(demoListings, term);
-  } catch {
+  } catch (error) {
+    console.error('searchListings failed:', error);
+
     return filterListings(demoListings, searchTerm.trim().toLowerCase());
   }
 }
@@ -162,17 +178,21 @@ export async function getListingDetails(id: string) {
       headers: authHeaders(),
       body: JSON.stringify({ _id: id }),
     });
-    if (!response.ok) throw new Error('Listing unavailable');
-    const payload = (await response.json()) as RawListing | RawListing[] | ListingsPayload;
-    const record = Array.isArray(payload)
-      ? payload[0]
-      : isListingsPayload(payload)
-        ? (payload.data || payload.listings || [])[0]
-        : payload;
+
+    if (!response.ok) {
+      throw new Error('Listing unavailable');
+    }
+
+    const payload = (await response.json()) as ListingsPayload;
+
+    const record = payload.Payload?.[0];
+
     return record
       ? normalizeListing(record, 0)
       : demoListings.find((listing) => listing.id === id) || demoListings[0];
-  } catch {
+  } catch (err) {
+    console.error('getListingDetails failed:', err);
+
     return demoListings.find((listing) => listing.id === id) || demoListings[0];
   }
 }
@@ -215,17 +235,31 @@ export async function logout() {
 
 function normalizeListing(item: RawListing, index: number): Listing {
   return {
-    ...item,
-    id: item._id || item.id || `listing-${index}`,
-    name: item.name || item.title || 'Mouv stay',
-    city: item.city || item.location || 'Africa',
-    type: item.type || 'Apartment',
-    tag: item.tag || 'Featured stay',
-    price: item.price || item.pricePerNight || 85,
-    rating: item.rating || '4.8',
-    guests: item.guests || item.maxGuests || 2,
-    beds: item.beds || 1,
-    image: item.image || item.images?.[0] || demoListings[0].image,
+    id: item._id || `listing-${index}`,
+
+    name: item.name?.trim() || 'Mouv stay',
+
+    city: item.location?.cityTown || item.location?.neighborhood || 'Africa',
+
+    type: item.propertyType?.name || item.listingType?.productType || 'Apartment',
+
+    tag:
+      item.listingStatus === 'RENT'
+        ? 'For rent'
+        : item.status === 'ACTIVE'
+          ? 'Featured stay'
+          : 'Stay',
+
+    price: item.pricing?.nightlyPrice ?? item.premium?.basicPremium ?? 85,
+
+    rating: item.rating !== undefined ? String(item.rating) : '4.8',
+
+    guests: item.details?.maxGuests ?? 2,
+
+    beds: item.details?.bedrooms ?? 1,
+
+    image: item.images?.find((image) => image.url)?.url || demoListings[0].image,
+
     description:
       item.description || 'A considered place to land, with everything you need for a good stay.',
   };
@@ -237,8 +271,4 @@ function filterListings(listings: Listing[], term: string): Listing[] {
       .toLowerCase()
       .includes(term)
   );
-}
-
-function isListingsPayload(payload: RawListing | ListingsPayload): payload is ListingsPayload {
-  return 'data' in payload || 'listings' in payload;
 }
