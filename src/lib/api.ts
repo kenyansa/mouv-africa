@@ -1,7 +1,16 @@
+import { getStoredSession, setStoredSession } from './token';
 import { Listing, ListingsPayload, RawListing, AuthPayload } from './types';
 
 const API_BASE = import.meta.env.VITE_CORE_URL || 'https://app.mconnect.africa/core';
 const API_KEY = import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyDJOxxdZLjMIzPhJPIhGtM6BQE0TQ53ZA0';
+
+function authHeaders(): HeadersInit {
+  const skey = getStoredSession()?.token || import.meta.env.VITE_SKEY;
+  return {
+    'Content-Type': 'application/json',
+    ...(skey ? { SKEY: skey } : {}),
+  };
+}
 
 export const demoListings: Listing[] = [
   {
@@ -97,10 +106,7 @@ export async function getListings() {
   try {
     const response = await fetch(`${API_BASE}/listClientListings`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(import.meta.env.VITE_SKEY ? { SKEY: import.meta.env.VITE_SKEY } : {}),
-      },
+      headers: authHeaders(),
       body: JSON.stringify({ status: 'ACTIVE' }),
     });
     if (!response.ok) throw new Error('Listings unavailable');
@@ -114,6 +120,69 @@ export async function getListings() {
   }
 }
 
+export async function searchListings(searchTerm: string) {
+  if (!searchTerm.trim()) return getListings();
+
+  try {
+    const response = await fetch(`${API_BASE}/listClientListings`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        searchTerm,
+        fieldsToSearchFor: [
+          { field: 'description' },
+          { field: 'furnishStatus' },
+          { field: 'listingStatus' },
+          { field: 'name' },
+        ],
+      }),
+    });
+    if (!response.ok) throw new Error('Search unavailable');
+    const payload = (await response.json()) as ListingsPayload | RawListing[];
+    const records = Array.isArray(payload) ? payload : payload.data || payload.listings || [];
+    return records.map((item, index) => normalizeListing(item, index));
+  } catch {
+    const term = searchTerm.toLowerCase();
+    return demoListings.filter((listing) =>
+      `${listing.name} ${listing.city} ${listing.type} ${listing.description}`
+        .toLowerCase()
+        .includes(term)
+    );
+  }
+}
+
+export async function getListingDetails(id: string) {
+  try {
+    const response = await fetch(`${API_BASE}/listClientListings`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ _id: id }),
+    });
+    if (!response.ok) throw new Error('Listing unavailable');
+    const payload = (await response.json()) as RawListing | RawListing[] | ListingsPayload;
+    const record = Array.isArray(payload)
+      ? payload[0]
+      : 'data' in payload || 'listings' in payload
+        ? (payload.data || payload.listings || [])[0]
+        : payload;
+    return record
+      ? normalizeListing(record, 0)
+      : demoListings.find((listing) => listing.id === id) || demoListings[0];
+  } catch {
+    return demoListings.find((listing) => listing.id === id) || demoListings[0];
+  }
+}
+
+export async function getUserDetails() {
+  const response = await fetch(`${API_BASE}/getuserdetails`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({}),
+  });
+  if (!response.ok) throw new Error('Unable to fetch user details');
+  return response.json();
+}
+
 export async function login(email: string, password: string) {
   const response = await fetch(
     `https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyPassword?key=${API_KEY}`,
@@ -124,16 +193,22 @@ export async function login(email: string, password: string) {
     }
   );
   const payload = (await response.json()) as AuthPayload;
-  if (!response.ok)
+  if (!response.ok) {
     throw new Error(
       payload.error?.message?.replaceAll('_', ' ').toLowerCase() || 'Unable to sign in'
     );
-  return { email: payload.email, token: payload.idToken, id: payload.localId };
+  }
+
+  const session = { email: payload.email, token: payload.idToken as string, id: payload.localId };
+  setStoredSession(session);
+  return session;
 }
 
 export async function logout() {
+  setStoredSession(null);
   return Promise.resolve();
 }
+
 function normalizeListing(item: RawListing, index: number): Listing {
   return {
     ...item,
