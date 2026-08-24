@@ -33,7 +33,6 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     <form onSubmit={handleSubmit} className="w-full">
       <p className="text-xs font-bold uppercase tracking-wider text-[#cf6a4c]">Welcome back</p>
       <h2 className="display mt-2 text-4xl text-[#193f32]">Sign in to mouv.</h2>
-      <p className="mt-2 text-sm text-[#68756d]">Use your Firebase account to save favorite stays.</p>
 
       <Input
         label="Email"

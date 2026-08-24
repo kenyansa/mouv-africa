@@ -111,11 +111,14 @@ export async function getListings() {
     });
     if (!response.ok) throw new Error('Listings unavailable');
     const payload = (await response.json()) as ListingsPayload | RawListing[];
+    console.log('raw payload shape:', payload); //raw fetching
     const records = Array.isArray(payload) ? payload : payload.data || payload.listings || [];
+    console.log('extracted records:', records); // extraction
     return Array.isArray(records) && records.length
       ? records.map((item, index) => normalizeListing(item, index))
       : demoListings;
-  } catch {
+  } catch (err) {
+    console.error('getListings failed:', err); //hey
     return demoListings;
   }
 }
