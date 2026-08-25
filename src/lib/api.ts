@@ -12,97 +12,10 @@ function authHeaders(): HeadersInit {
   };
 }
 
-export const demoListings: Listing[] = [
-  {
-    id: '1',
-    name: 'The Green Courtyard',
-    city: 'Kigali, Rwanda',
-    type: 'Villa',
-    tag: 'Guest favorite',
-    price: 84,
-    rating: '4.94',
-    guests: 4,
-    beds: 2,
-    image:
-      'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1200&q=85',
-    description:
-      'A sun-filled courtyard home tucked into one of Kigali’s quietest, greenest neighborhoods.',
-  },
-  {
-    id: '2',
-    name: 'Palm & Sea Studio',
-    city: 'Dakar, Senegal',
-    type: 'Apartment',
-    tag: 'Near the ocean',
-    price: 62,
-    rating: '4.88',
-    guests: 2,
-    beds: 1,
-    image:
-      'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=1200&q=85',
-    description: 'A calm, tactile studio where the city and Atlantic breeze meet at your doorstep.',
-  },
-  {
-    id: '3',
-    name: 'Little Baobab House',
-    city: 'Accra, Ghana',
-    type: 'Villa',
-    tag: 'Design pick',
-    price: 118,
-    rating: '4.91',
-    guests: 6,
-    beds: 3,
-    image:
-      'https://images.unsplash.com/photo-1600607687920-4e2a09cf159d?auto=format&fit=crop&w=1200&q=85',
-    description:
-      'An easygoing modern home with a private garden, warm materials, and room to gather.',
-  },
-  {
-    id: '4',
-    name: 'Safi House',
-    city: 'Marrakech, Morocco',
-    type: 'Apartment',
-    tag: 'New on mouv',
-    price: 97,
-    rating: '4.86',
-    guests: 3,
-    beds: 2,
-    image:
-      'https://images.unsplash.com/photo-1600607688969-a5bfcd646154?auto=format&fit=crop&w=1200&q=85',
-    description:
-      'A quiet riad-inspired retreat filled with light, texture, and the scent of citrus.',
-  },
-  {
-    id: '5',
-    name: 'The Coastline Room',
-    city: 'Mombasa, Kenya',
-    type: 'Apartment',
-    tag: 'Beachfront',
-    price: 76,
-    rating: '4.9',
-    guests: 2,
-    beds: 1,
-    image:
-      'https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?auto=format&fit=crop&w=1200&q=85',
-    description: 'Wake up to the Indian Ocean in this simple, breezy room steps from the sand.',
-  },
-  {
-    id: '6',
-    name: 'Kivu Slow House',
-    city: 'Gisenyi, Rwanda',
-    type: 'Villa',
-    tag: 'Slow travel',
-    price: 135,
-    rating: '4.97',
-    guests: 5,
-    beds: 3,
-    image:
-      'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=85',
-    description: 'A lakeside hideaway made for long breakfasts, deep breaths, and slower mornings.',
-  },
-];
+const FALLBACK_IMAGE =
+  'https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=1400&q=80';
 
-export async function getListings() {
+export async function getListings(): Promise<Listing[]> {
   try {
     const response = await fetch(`${API_BASE}/listClientListings`, {
       method: 'POST',
@@ -115,23 +28,16 @@ export async function getListings() {
     }
 
     const payload = (await response.json()) as ListingsPayload;
-
-    console.log('raw payload shape:', payload);
-
     const records = Array.isArray(payload.Payload) ? payload.Payload : [];
 
-    console.log('extracted records:', records);
-
-    return records.length
-      ? records.map((item, index) => normalizeListing(item, index))
-      : demoListings;
+    return records.map((item, index) => normalizeListing(item, index));
   } catch (err) {
     console.error('getListings failed:', err);
-    return demoListings;
+    return [];
   }
 }
 
-export async function searchListings(searchTerm: string) {
+export async function searchListings(searchTerm: string): Promise<Listing[]> {
   if (!searchTerm.trim()) return getListings();
 
   try {
@@ -144,6 +50,9 @@ export async function searchListings(searchTerm: string) {
           { field: 'furnishStatus' },
           { field: 'listingStatus' },
           { field: 'name' },
+          { field: 'city' },
+          { field: 'location' },
+          { field: 'type' },
         ],
         searchTerm: searchTerm.trim(),
       }),
@@ -154,24 +63,18 @@ export async function searchListings(searchTerm: string) {
     }
 
     const payload = (await response.json()) as ListingsPayload;
-
     const records = Array.isArray(payload.Payload) ? payload.Payload : [];
-
     const normalized = records.map((item, index) => normalizeListing(item, index));
-
     const term = searchTerm.trim().toLowerCase();
 
-    const matches = filterListings(normalized, term);
-
-    return matches.length ? matches : filterListings(demoListings, term);
+    return filterListings(normalized, term);
   } catch (error) {
     console.error('searchListings failed:', error);
-
-    return filterListings(demoListings, searchTerm.trim().toLowerCase());
+    return [];
   }
 }
 
-export async function getListingDetails(id: string) {
+export async function getListingDetails(id: string): Promise<Listing> {
   try {
     const response = await fetch(`${API_BASE}/listClientListings`, {
       method: 'POST',
@@ -184,16 +87,16 @@ export async function getListingDetails(id: string) {
     }
 
     const payload = (await response.json()) as ListingsPayload;
-
     const record = payload.Payload?.[0];
 
-    return record
-      ? normalizeListing(record, 0)
-      : demoListings.find((listing) => listing.id === id) || demoListings[0];
+    if (!record) {
+      return createGenericListing(id);
+    }
+
+    return normalizeListing(record, 0);
   } catch (err) {
     console.error('getListingDetails failed:', err);
-
-    return demoListings.find((listing) => listing.id === id) || demoListings[0];
+    return createGenericListing(id);
   }
 }
 
@@ -262,10 +165,26 @@ function normalizeListing(item: RawListing, index: number): Listing {
 
     beds: item.details?.bedrooms ?? 1,
 
-    image: item.images?.find((image) => image.url)?.url || demoListings[0].image,
+    image: item.images?.find((image) => image.url)?.url || FALLBACK_IMAGE,
 
     description:
       item.description || 'A considered place to land, with everything you need for a good stay.',
+  };
+}
+
+function createGenericListing(id: string): Listing {
+  return {
+    id,
+    name: 'Mouv stay',
+    city: 'Africa',
+    type: 'Apartment',
+    tag: 'Featured stay',
+    price: 85,
+    rating: '4.8',
+    guests: 2,
+    beds: 1,
+    image: FALLBACK_IMAGE,
+    description: 'A considered place to land, with everything you need for a good stay.',
   };
 }
 
