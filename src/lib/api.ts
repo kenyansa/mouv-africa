@@ -1,11 +1,14 @@
 import { getStoredSession, setStoredSession } from './token';
 import type { AuthPayload, Listing, ListingsPayload, RawListing } from './types';
 
-const API_BASE = import.meta.env.VITE_CORE_URL || 'https://app.mconnect.africa/core';
+const API_BASE = import.meta.env.VITE_CORE_URL || '/api/core';
 const API_KEY = import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyDJOxxdZLjMIzPhJPIhGtM6BQE0TQ53ZA0';
 
-function authHeaders(): HeadersInit {
-  const skey = getStoredSession()?.token || import.meta.env.VITE_SKEY;
+const AUTH_REFRESH_BUFFER_MS = 60_000;
+
+async function authHeaders(): Promise<HeadersInit> {
+  const session = await refreshSessionIfNeeded();
+  const skey = session?.token || import.meta.env.VITE_SKEY;
   return {
     'Content-Type': 'application/json',
     ...(skey ? { SKEY: skey } : {}),
@@ -19,7 +22,7 @@ export async function getListings(): Promise<Listing[]> {
   try {
     const response = await fetch(`${API_BASE}/listClientListings`, {
       method: 'POST',
-      headers: authHeaders(),
+      headers: await authHeaders(),
       body: JSON.stringify({ status: 'ACTIVE' }),
     });
 
@@ -43,7 +46,7 @@ export async function searchListings(searchTerm: string): Promise<Listing[]> {
   try {
     const response = await fetch(`${API_BASE}/listClientListings`, {
       method: 'POST',
-      headers: authHeaders(),
+      headers: await authHeaders(),
       body: JSON.stringify({
         fieldsToSearchFor: [
           { field: 'description' },
@@ -78,7 +81,7 @@ export async function getListingDetails(id: string): Promise<Listing> {
   try {
     const response = await fetch(`${API_BASE}/listClientListings`, {
       method: 'POST',
-      headers: authHeaders(),
+      headers: await authHeaders(),
       body: JSON.stringify({ _id: id }),
     });
 
@@ -103,7 +106,7 @@ export async function getListingDetails(id: string): Promise<Listing> {
 export async function getUserDetails(): Promise<unknown> {
   const response = await fetch(`${API_BASE}/getuserdetails`, {
     method: 'POST',
-    headers: authHeaders(),
+    headers: await authHeaders(),
     body: JSON.stringify({}),
   });
   if (!response.ok) throw new Error('Unable to fetch user details');
@@ -112,7 +115,7 @@ export async function getUserDetails(): Promise<unknown> {
 
 export async function login(email: string, password: string) {
   const response = await fetch(
-    `https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyPassword?key=${API_KEY}`,
+    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -130,9 +133,54 @@ export async function login(email: string, password: string) {
     throw new Error('Firebase did not return a session token');
   }
 
-  const session = { email: payload.email, token: payload.idToken, id: payload.localId };
+  const session = {
+    email: payload.email,
+    token: payload.idToken,
+    id: payload.localId,
+    refreshToken: payload.refreshToken,
+    expiresAt: Date.now() + Number(payload.expiresIn || 3600) * 1000,
+  };
   setStoredSession(session);
   return session;
+}
+
+async function refreshSessionIfNeeded() {
+  const session = getStoredSession();
+  if (!session?.refreshToken || !session.expiresAt) return session;
+  if (session.expiresAt - Date.now() > AUTH_REFRESH_BUFFER_MS) return session;
+
+  const response = await fetch(
+    `https://securetoken.googleapis.com/v1/token?key=${API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: session.refreshToken,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    setStoredSession(null);
+    return null;
+  }
+
+  const payload = (await response.json()) as {
+    id_token: string;
+    refresh_token: string;
+    expires_in: string;
+    user_id?: string;
+  };
+  const refreshedSession = {
+    ...session,
+    token: payload.id_token,
+    refreshToken: payload.refresh_token,
+    id: payload.user_id || session.id,
+    expiresAt: Date.now() + Number(payload.expires_in || 3600) * 1000,
+  };
+  setStoredSession(refreshedSession);
+  return refreshedSession;
 }
 
 export async function logout() {

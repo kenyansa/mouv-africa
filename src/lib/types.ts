@@ -293,4 +293,6 @@ export interface AuthPayload {
   email?: string;
   idToken?: string;
   localId?: string;
+  refreshToken?: string;
+  expiresIn?: string;
 }

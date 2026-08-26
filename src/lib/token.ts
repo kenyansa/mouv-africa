@@ -4,6 +4,8 @@ export interface StoredSession {
   email?: string;
   id?: string;
   token: string;
+  refreshToken?: string;
+  expiresAt?: number;
 }
 
 export function getStoredSession(): StoredSession | null {
