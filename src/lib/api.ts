@@ -1,7 +1,7 @@
 import { getStoredSession, setStoredSession } from './token';
 import type { AuthPayload, Listing, ListingsPayload, RawListing } from './types';
 
-const API_BASE = import.meta.env.VITE_CORE_URL || '/api/core';
+const API_BASE = import.meta.env.PROD ? '/api/core' : import.meta.env.VITE_CORE_URL || '/api/core';
 const API_KEY = import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyDJOxxdZLjMIzPhJPIhGtM6BQE0TQ53ZA0';
 
 const AUTH_REFRESH_BUFFER_MS = 60_000;
@@ -149,17 +149,14 @@ async function refreshSessionIfNeeded() {
   if (!session?.refreshToken || !session.expiresAt) return session;
   if (session.expiresAt - Date.now() > AUTH_REFRESH_BUFFER_MS) return session;
 
-  const response = await fetch(
-    `https://securetoken.googleapis.com/v1/token?key=${API_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: session.refreshToken,
-      }),
-    }
-  );
+  const response = await fetch(`https://securetoken.googleapis.com/v1/token?key=${API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: session.refreshToken,
+    }),
+  });
 
   if (!response.ok) {
     setStoredSession(null);
