@@ -5,6 +5,7 @@ export default async function handler(req, res) {
     ? req.query.path
     : String(req.query.path || '').split('/');
   const upstreamUrl = `${UPSTREAM_BASE}/${segments.filter(Boolean).join('/')}`;
+  console.log('Proxying', req.method, 'to', upstreamUrl);
   const requestBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? {});
 
   try {
