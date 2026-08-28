@@ -5,7 +5,7 @@ export default async function handler(req, res) {
     ? req.query.path
     : String(req.query.path || '').split('/');
   const upstreamUrl = `${UPSTREAM_BASE}/${segments.filter(Boolean).join('/')}`;
-  console.log('Proxying', req.method, 'to', upstreamUrl);
+  const skey = req.headers.skey || process.env.CORE_SKEY;
   const requestBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body ?? {});
 
   try {
@@ -13,7 +13,7 @@ export default async function handler(req, res) {
       method: req.method,
       headers: {
         'Content-Type': 'application/json',
-        ...(req.headers.skey ? { SKEY: req.headers.skey } : {}),
+        ...(skey ? { SKEY: skey } : {}),
       },
       body:
         req.method !== 'GET' && req.method !== 'HEAD' ? requestBody : undefined,
@@ -28,6 +28,7 @@ export default async function handler(req, res) {
       res.status(upstreamResponse.status).send(text);
     }
   } catch (error) {
-    res.status(502).json({ error: 'Upstream request failed', detail: String(error) });
+    console.error('Core proxy failed:', error);
+    res.status(502).json({ error: 'Upstream request failed' });
   }
 }
